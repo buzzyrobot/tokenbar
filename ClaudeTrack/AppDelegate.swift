@@ -7,9 +7,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, SPUStandardUserDriverDelegat
     var updaterController: SPUStandardUpdaterController!
 
     private let feedURL = URL(string: "https://github.com/buzzyrobot/tokenbar/releases/latest/download/appcast.xml")!
-    private let releasesURL = URL(string: "https://github.com/buzzyrobot/tokenbar/releases/latest")!
 
-    // MARK: - Custom update check
+    // MARK: - Update check
 
     func checkForUpdates() {
         URLSession.shared.dataTask(with: feedURL) { [weak self] data, _, error in
@@ -22,16 +21,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, SPUStandardUserDriverDelegat
 
         guard let data, let xml = String(data: data, encoding: .utf8),
               let latest = Self.parseVersion(from: xml) else {
-            presentAlert(title: "Błąd sprawdzania aktualizacji",
-                         message: error?.localizedDescription ?? "Nie udało się odczytać kanału aktualizacji.")
+            showAlert(title: "Błąd sprawdzania aktualizacji",
+                      message: error?.localizedDescription ?? "Nie udało się odczytać kanału aktualizacji.")
             return
         }
 
         if latest.compare(current, options: .numeric) == .orderedDescending {
-            presentUpdateAvailable(latest: latest, current: current)
+            let dmgURL = Self.parseDMGURL(from: xml)
+            showUpdateAvailable(latest: latest, current: current, dmgURL: dmgURL)
         } else {
-            presentAlert(title: "Masz najnowszą wersję",
-                         message: "TokenBar \(current) jest aktualny.")
+            showAlert(title: "Masz najnowszą wersję",
+                      message: "TokenBar \(current) jest aktualny.")
         }
     }
 
@@ -42,32 +42,138 @@ class AppDelegate: NSObject, NSApplicationDelegate, SPUStandardUserDriverDelegat
         return String(xml[start..<end]).trimmingCharacters(in: .whitespaces)
     }
 
-    private func presentUpdateAvailable(latest: String, current: String) {
+    private static func parseDMGURL(from xml: String) -> URL? {
+        guard let start = xml.range(of: "enclosure url=\"")?.upperBound else { return nil }
+        let suffix = xml[start...]
+        guard let endIdx = suffix.range(of: "\"")?.lowerBound else { return nil }
+        return URL(string: String(suffix[..<endIdx]))
+    }
+
+    // MARK: - Update install
+
+    private func showUpdateAvailable(latest: String, current: String, dmgURL: URL?) {
         let alert = NSAlert()
         alert.messageText = "Dostępna aktualizacja \(latest)"
-        alert.informativeText = "Zainstalowana wersja: \(current)"
-        alert.addButton(withTitle: "Pobierz")
+        alert.informativeText = "Zainstalowana wersja: \(current)\n\nAplikacja zostanie zaktualizowana i ponownie uruchomiona automatycznie."
+        alert.addButton(withTitle: "Zainstaluj")
         alert.addButton(withTitle: "Nie teraz")
-        if runModal(alert) == .alertFirstButtonReturn {
-            NSWorkspace.shared.open(releasesURL)
+
+        if runModalFront(alert) == .alertFirstButtonReturn {
+            if let dmgURL {
+                downloadAndInstall(version: latest, dmgURL: dmgURL)
+            }
         }
     }
 
-    private func presentAlert(title: String, message: String) {
-        let alert = NSAlert()
-        alert.messageText = title
-        alert.informativeText = message
-        runModal(alert)
+    private func downloadAndInstall(version: String, dmgURL: URL) {
+        let progressPanel = makeProgressPanel(message: "Pobieranie TokenBar \(version)…")
+        NSApp.setActivationPolicy(.accessory)
+        NSApp.activate(ignoringOtherApps: true)
+        progressPanel.makeKeyAndOrderFront(nil)
+        progressPanel.orderFrontRegardless()
+
+        URLSession.shared.downloadTask(with: dmgURL) { [weak self] tempURL, _, error in
+            DispatchQueue.main.async { progressPanel.close() }
+
+            guard let self else { return }
+
+            if let error {
+                DispatchQueue.main.async {
+                    self.showAlert(title: "Błąd pobierania", message: error.localizedDescription)
+                }
+                return
+            }
+            guard let tempURL else { return }
+
+            DispatchQueue.global(qos: .userInitiated).async {
+                self.installFromDMG(at: tempURL, version: version)
+            }
+        }.resume()
+    }
+
+    private func installFromDMG(at tempURL: URL, version: String) {
+        let dmgPath = FileManager.default.temporaryDirectory
+            .appendingPathComponent("TokenBar-update.dmg")
+        try? FileManager.default.removeItem(at: dmgPath)
+        try? FileManager.default.moveItem(at: tempURL, to: dmgPath)
+
+        // Mount DMG (volume is named "TokenBar")
+        run("/usr/bin/hdiutil", "attach", dmgPath.path, "-nobrowse", "-quiet")
+
+        let mountedApp = "/Volumes/TokenBar/TokenBar.app"
+        let destination = "/Applications/TokenBar.app"
+
+        // Copy .app to /Applications
+        run("/bin/cp", "-Rf", mountedApp, destination)
+
+        // Unmount
+        run("/usr/bin/hdiutil", "detach", "/Volumes/TokenBar", "-quiet", "-force")
+
+        // Clean up temp DMG
+        try? FileManager.default.removeItem(at: dmgPath)
+
+        // Launch new version and quit old
+        DispatchQueue.main.async {
+            self.run("/usr/bin/open", "-a", destination)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                NSApplication.shared.terminate(nil)
+            }
+        }
     }
 
     @discardableResult
-    private func runModal(_ alert: NSAlert) -> NSApplication.ModalResponse {
-        // .accessory lets the app be activated without showing a Dock icon
+    private func run(_ command: String, _ args: String...) -> Int32 {
+        let p = Process()
+        p.launchPath = command
+        p.arguments = args
+        p.launch()
+        p.waitUntilExit()
+        return p.terminationStatus
+    }
+
+    // MARK: - Alert helpers
+
+    private func showAlert(title: String, message: String) {
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = message
+        runModalFront(alert)
+    }
+
+    @discardableResult
+    private func runModalFront(_ alert: NSAlert) -> NSApplication.ModalResponse {
         NSApp.setActivationPolicy(.accessory)
         NSApp.activate(ignoringOtherApps: true)
         let response = alert.runModal()
         NSApp.setActivationPolicy(.prohibited)
         return response
+    }
+
+    private func makeProgressPanel(message: String) -> NSPanel {
+        let panel = NSPanel(
+            contentRect: NSRect(x: 0, y: 0, width: 320, height: 76),
+            styleMask: [.titled, .fullSizeContentView],
+            backing: .buffered,
+            defer: false
+        )
+        panel.title = "TokenBar"
+        panel.center()
+        panel.isReleasedWhenClosed = false
+
+        let label = NSTextField(labelWithString: message)
+        label.frame = NSRect(x: 20, y: 42, width: 280, height: 18)
+        label.alignment = .center
+        label.font = .systemFont(ofSize: 13)
+
+        let bar = NSProgressIndicator()
+        bar.frame = NSRect(x: 20, y: 18, width: 280, height: 14)
+        bar.style = .bar
+        bar.isIndeterminate = true
+        bar.startAnimation(nil)
+
+        panel.contentView?.addSubview(label)
+        panel.contentView?.addSubview(bar)
+        return panel
     }
 
     // MARK: - Sparkle delegate (automatic background checks)
