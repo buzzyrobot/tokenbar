@@ -78,7 +78,7 @@ struct FooterBar: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Text("1.04 by buzzyrobot")
+            Text("1.05 by buzzyrobot")
                 .font(.system(size: 11))
                 .foregroundStyle(DS.label.opacity(0.7))
             Spacer()
@@ -287,7 +287,7 @@ struct CodexSection: View {
 // MARK: - Metric row
 
 struct MetricRow: View {
-    let label: String
+    let label: LocalizedStringKey
     let percent: Double
 
     var body: some View {
