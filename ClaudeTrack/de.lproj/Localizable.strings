@@ -1,0 +1,34 @@
+/* Section titles */
+"Claude" = "Claude";
+"Codex" = "Codex";
+
+/* Claude section */
+"Bieżąca sesja" = "Aktuelle Sitzung";
+"Tygodniowo" = "Wöchentlich";
+"Claude Design" = "Claude Design";
+"Brak danych użycia" = "Keine Nutzungsdaten";
+"Brak danych" = "Keine Daten";
+"Reset sesji" = "Sitzungs-Reset";
+"Limit osiągnięty" = "Limit erreicht";
+"Zaloguj się do Claude.ai" = "Bei Claude.ai anmelden";
+
+/* Settings panel */
+"Zaloguj się do ChatGPT" = "Bei ChatGPT anmelden";
+"Wyloguj z ChatGPT" = "Von ChatGPT abmelden";
+"Wyloguj z Claude.ai" = "Von Claude.ai abmelden";
+"Sprawdź aktualizacje" = "Nach Updates suchen";
+"Zamknij TokenBar" = "TokenBar beenden";
+
+/* Active task */
+"Zakończ zadanie" = "Aufgabe abschließen";
+
+/* Footer */
+"1.02 by buzzyrobot" = "1.02 by buzzyrobot";
+
+/* Reset timer format strings */
+"time_h_m" = "%d Std. %d Min.";
+"time_m" = "%d Min.";
+
+/* Login window title */
+"chatgpt_login_title" = "ChatGPT – Anmelden";
+"Myślę..." = "Denke nach...";

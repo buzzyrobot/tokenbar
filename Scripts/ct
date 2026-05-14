@@ -1,0 +1,18 @@
+#!/bin/bash
+# ct - ClaudeTrack CLI helper
+# Usage:
+#   ct start "nazwa zadania"   -- rozpoczyna zadanie
+#   ct done  "nazwa zadania"   -- kończy zadanie + powiadomienie
+#
+# Install: sudo cp ct /usr/local/bin/ct && sudo chmod +x /usr/local/bin/ct
+
+CMD="${1:-start}"
+NAME="${2:-Zadanie}"
+
+if [[ "$CMD" != "start" && "$CMD" != "done" ]]; then
+    echo "Użycie: ct <start|done> \"nazwa zadania\""
+    exit 1
+fi
+
+ENCODED=$(python3 -c "import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))" "$NAME")
+open "claudetrack://$CMD?name=$ENCODED"
