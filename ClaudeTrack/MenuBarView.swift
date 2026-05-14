@@ -78,7 +78,7 @@ struct FooterBar: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Text("1.03 by buzzyrobot")
+            Text("1.04 by buzzyrobot")
                 .font(.system(size: 11))
                 .foregroundStyle(DS.label.opacity(0.7))
             Spacer()
@@ -227,8 +227,8 @@ struct ClaudeSection: View {
                 if let pct = fetcher.usage.currentSessionPct {
                     VStack(spacing: 0) {
                         MetricRow(label: "Bieżąca sesja", percent: pct)
-                        if let resetsAt = fetcher.usage.resetsAt {
-                            ResetRow(resetsAt: resetsAt)
+                        if let resetsAt = fetcher.usage.resetsAt, resetsAt > Date() {
+                            ResetRow(resetsAt: resetsAt, onExpire: { Task { await fetcher.refresh() } })
                         }
                     }
                 }
@@ -315,32 +315,39 @@ struct MetricRow: View {
 
 struct ResetRow: View {
     let resetsAt: Date
+    var onExpire: (() -> Void)? = nil
     private let sessionDuration: TimeInterval = 5 * 3600
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
             let remaining = max(0, resetsAt.timeIntervalSince(context.date))
-            let elapsed = sessionDuration - remaining
-            let pct = min(100.0, elapsed / sessionDuration * 100)
-            let h = Int(remaining) / 3600
-            let m = Int(remaining) % 3600 / 60
 
-            VStack(alignment: .leading, spacing: 5) {
-                ResetProgressBar(percent: pct)
-                HStack(alignment: .firstTextBaseline) {
-                    Text("Reset sesji")
-                        .font(DS.compactMedium(14))
-                        .foregroundStyle(DS.label)
-                    Spacer()
-                    Text(verbatim: h > 0
-                        ? String(format: String(localized: "time_h_m"), h, m)
-                        : String(format: String(localized: "time_m"), m))
-                        .font(.custom("BitcountSingle-Regular", size: 12))
-                        .foregroundStyle(.white)
+            if remaining > 0 {
+                let elapsed = sessionDuration - remaining
+                let pct = min(100.0, elapsed / sessionDuration * 100)
+                let h = Int(remaining) / 3600
+                let m = Int(remaining) % 3600 / 60
+
+                VStack(alignment: .leading, spacing: 5) {
+                    ResetProgressBar(percent: pct)
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("Reset sesji")
+                            .font(DS.compactMedium(14))
+                            .foregroundStyle(DS.label)
+                        Spacer()
+                        Text(verbatim: h > 0
+                            ? String(format: String(localized: "time_h_m"), h, m)
+                            : String(format: String(localized: "time_m"), m))
+                            .font(.custom("BitcountSingle-Regular", size: 12))
+                            .foregroundStyle(.white)
+                    }
                 }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 6)
+            } else {
+                Color.clear.frame(height: 0)
+                    .onAppear { onExpire?() }
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 6)
         }
     }
 }
