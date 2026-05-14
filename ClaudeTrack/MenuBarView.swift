@@ -78,7 +78,7 @@ struct FooterBar: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Text("1.02 by buzzyrobot")
+            Text("1.03 by buzzyrobot")
                 .font(.system(size: 11))
                 .foregroundStyle(DS.label.opacity(0.7))
             Spacer()
@@ -113,8 +113,10 @@ struct SettingsPanel: View {
                 settingsRow(icon: "person.slash", label: "Wyloguj z Claude.ai") { fetcher.logout() }
             }
             settingsRow(icon: "arrow.down.circle", label: "Sprawdź aktualizacje") {
-                NSApp.activate(ignoringOtherApps: true)
-                if let d = NSApp.delegate as? AppDelegate { d.updaterController.checkForUpdates(nil) }
+                NSRunningApplication.current.activate(options: .activateIgnoringOtherApps)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                    if let d = NSApp.delegate as? AppDelegate { d.updaterController.checkForUpdates(nil) }
+                }
             }
             settingsRow(icon: "power", label: "Zamknij TokenBar") { NSApplication.shared.terminate(nil) }
         }

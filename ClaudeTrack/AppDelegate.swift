@@ -4,8 +4,22 @@ import Sparkle
 class AppDelegate: NSObject, NSApplicationDelegate, SPUStandardUserDriverDelegate {
     var updaterController: SPUStandardUpdaterController!
 
+    // Called when Sparkle is about to show an update available window
     func standardUserDriverWillHandleShowingUpdate(_ handleShowingUpdate: Bool, forUpdate update: SUAppcastItem, state: SPUUserUpdateState) {
-        NSApp.activate(ignoringOtherApps: true)
+        bringSparkleToFront()
+    }
+
+    // Called when Sparkle is about to show any modal alert (including "you're up to date")
+    func standardUserDriverWillShowModalAlert() {
+        bringSparkleToFront()
+    }
+
+    private func bringSparkleToFront() {
+        NSRunningApplication.current.activate(options: .activateIgnoringOtherApps)
+        // Give Sparkle time to create its window, then force it above everything
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+            NSApp.windows.forEach { $0.orderFrontRegardless() }
+        }
     }
 
     private var lockFileDescriptor: Int32 = -1
