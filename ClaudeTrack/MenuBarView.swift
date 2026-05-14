@@ -113,10 +113,7 @@ struct SettingsPanel: View {
                 settingsRow(icon: "person.slash", label: "Wyloguj z Claude.ai") { fetcher.logout() }
             }
             settingsRow(icon: "arrow.down.circle", label: "Sprawdź aktualizacje") {
-                NSRunningApplication.current.activate(options: .activateIgnoringOtherApps)
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                    if let d = NSApp.delegate as? AppDelegate { d.updaterController.checkForUpdates(nil) }
-                }
+                if let d = NSApp.delegate as? AppDelegate { d.checkForUpdates() }
             }
             settingsRow(icon: "power", label: "Zamknij TokenBar") { NSApplication.shared.terminate(nil) }
         }

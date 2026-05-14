@@ -4,23 +4,79 @@ import Sparkle
 class AppDelegate: NSObject, NSApplicationDelegate, SPUStandardUserDriverDelegate {
     var updaterController: SPUStandardUpdaterController!
 
-    // Called when Sparkle is about to show an update available window
-    func standardUserDriverWillHandleShowingUpdate(_ handleShowingUpdate: Bool, forUpdate update: SUAppcastItem, state: SPUUserUpdateState) {
-        bringSparkleToFront()
+    private let feedURL = URL(string: "https://github.com/buzzyrobot/tokenbar/releases/latest/download/appcast.xml")!
+    private let releasesURL = URL(string: "https://github.com/buzzyrobot/tokenbar/releases/latest")!
+
+    // MARK: - Custom update check (reliable NSAlert-based, bypasses Sparkle UI)
+
+    func checkForUpdates() {
+        URLSession.shared.dataTask(with: feedURL) { [weak self] data, _, error in
+            DispatchQueue.main.async { self?.handleFeedResponse(data: data, error: error) }
+        }.resume()
     }
 
-    // Called when Sparkle is about to show any modal alert (including "you're up to date")
-    func standardUserDriverWillShowModalAlert() {
-        bringSparkleToFront()
+    private func handleFeedResponse(data: Data?, error: Error?) {
+        let current = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0"
+
+        guard let data, let xml = String(data: data, encoding: .utf8),
+              let latest = Self.parseVersion(from: xml) else {
+            showAlert(title: "Błąd sprawdzania aktualizacji",
+                      message: error?.localizedDescription ?? "Nie udało się odczytać kanału aktualizacji.")
+            return
+        }
+
+        if latest.compare(current, options: .numeric) == .orderedDescending {
+            showUpdateAvailable(latest: latest, current: current)
+        } else {
+            showAlert(title: "Masz najnowszą wersję",
+                      message: "TokenBar \(current) jest aktualny.")
+        }
     }
 
-    private func bringSparkleToFront() {
+    private static func parseVersion(from xml: String) -> String? {
+        guard let start = xml.range(of: "<sparkle:shortVersionString>")?.upperBound,
+              let end = xml.range(of: "</sparkle:shortVersionString>")?.lowerBound,
+              start <= end else { return nil }
+        return String(xml[start..<end]).trimmingCharacters(in: .whitespaces)
+    }
+
+    private func showUpdateAvailable(latest: String, current: String) {
         NSRunningApplication.current.activate(options: .activateIgnoringOtherApps)
-        // Give Sparkle time to create its window, then force it above everything
+        let alert = NSAlert()
+        alert.messageText = "Dostępna aktualizacja \(latest)"
+        alert.informativeText = "Zainstalowana wersja: \(current)"
+        alert.addButton(withTitle: "Pobierz")
+        alert.addButton(withTitle: "Nie teraz")
+        if alert.runModal() == .alertFirstButtonReturn {
+            NSWorkspace.shared.open(releasesURL)
+        }
+    }
+
+    private func showAlert(title: String, message: String) {
+        NSRunningApplication.current.activate(options: .activateIgnoringOtherApps)
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = message
+        alert.runModal()
+    }
+
+    // MARK: - Sparkle delegate (handles automatic background checks only)
+
+    func standardUserDriverWillHandleShowingUpdate(_ handleShowingUpdate: Bool, forUpdate update: SUAppcastItem, state: SPUUserUpdateState) {
+        NSRunningApplication.current.activate(options: .activateIgnoringOtherApps)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
             NSApp.windows.forEach { $0.orderFrontRegardless() }
         }
     }
+
+    func standardUserDriverWillShowModalAlert() {
+        NSRunningApplication.current.activate(options: .activateIgnoringOtherApps)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+            NSApp.windows.forEach { $0.orderFrontRegardless() }
+        }
+    }
+
+    // MARK: - Lifecycle
 
     private var lockFileDescriptor: Int32 = -1
 
@@ -47,10 +103,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, SPUStandardUserDriverDelegat
     private func handleURL(_ url: URL) {
         guard url.scheme == "tokenbar",
               let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return }
-
         let name = components.queryItems?.first(where: { $0.name == "name" })?.value ?? "Zadanie"
         let store = TaskStore.shared
-
         switch url.host {
         case "start":
             store.startTask(name: name)
