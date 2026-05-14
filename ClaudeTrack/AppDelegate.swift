@@ -2,12 +2,14 @@ import AppKit
 import Sparkle
 
 class AppDelegate: NSObject, NSApplicationDelegate, SPUStandardUserDriverDelegate {
+    static weak var current: AppDelegate?
+
     var updaterController: SPUStandardUpdaterController!
 
     private let feedURL = URL(string: "https://github.com/buzzyrobot/tokenbar/releases/latest/download/appcast.xml")!
     private let releasesURL = URL(string: "https://github.com/buzzyrobot/tokenbar/releases/latest")!
 
-    // MARK: - Custom update check (reliable NSAlert-based, bypasses Sparkle UI)
+    // MARK: - Custom update check
 
     func checkForUpdates() {
         URLSession.shared.dataTask(with: feedURL) { [weak self] data, _, error in
@@ -20,57 +22,67 @@ class AppDelegate: NSObject, NSApplicationDelegate, SPUStandardUserDriverDelegat
 
         guard let data, let xml = String(data: data, encoding: .utf8),
               let latest = Self.parseVersion(from: xml) else {
-            showAlert(title: "Błąd sprawdzania aktualizacji",
-                      message: error?.localizedDescription ?? "Nie udało się odczytać kanału aktualizacji.")
+            presentAlert(title: "Błąd sprawdzania aktualizacji",
+                         message: error?.localizedDescription ?? "Nie udało się odczytać kanału aktualizacji.")
             return
         }
 
         if latest.compare(current, options: .numeric) == .orderedDescending {
-            showUpdateAvailable(latest: latest, current: current)
+            presentUpdateAvailable(latest: latest, current: current)
         } else {
-            showAlert(title: "Masz najnowszą wersję",
-                      message: "TokenBar \(current) jest aktualny.")
+            presentAlert(title: "Masz najnowszą wersję",
+                         message: "TokenBar \(current) jest aktualny.")
         }
     }
 
     private static func parseVersion(from xml: String) -> String? {
         guard let start = xml.range(of: "<sparkle:shortVersionString>")?.upperBound,
-              let end = xml.range(of: "</sparkle:shortVersionString>")?.lowerBound,
+              let end   = xml.range(of: "</sparkle:shortVersionString>")?.lowerBound,
               start <= end else { return nil }
         return String(xml[start..<end]).trimmingCharacters(in: .whitespaces)
     }
 
-    private func showUpdateAvailable(latest: String, current: String) {
-        NSRunningApplication.current.activate(options: .activateIgnoringOtherApps)
+    private func presentUpdateAvailable(latest: String, current: String) {
         let alert = NSAlert()
         alert.messageText = "Dostępna aktualizacja \(latest)"
         alert.informativeText = "Zainstalowana wersja: \(current)"
         alert.addButton(withTitle: "Pobierz")
         alert.addButton(withTitle: "Nie teraz")
-        if alert.runModal() == .alertFirstButtonReturn {
+        if runModal(alert) == .alertFirstButtonReturn {
             NSWorkspace.shared.open(releasesURL)
         }
     }
 
-    private func showAlert(title: String, message: String) {
-        NSRunningApplication.current.activate(options: .activateIgnoringOtherApps)
+    private func presentAlert(title: String, message: String) {
         let alert = NSAlert()
         alert.messageText = title
         alert.informativeText = message
-        alert.runModal()
+        runModal(alert)
     }
 
-    // MARK: - Sparkle delegate (handles automatic background checks only)
+    @discardableResult
+    private func runModal(_ alert: NSAlert) -> NSApplication.ModalResponse {
+        // .accessory lets the app be activated without showing a Dock icon
+        NSApp.setActivationPolicy(.accessory)
+        NSApp.activate(ignoringOtherApps: true)
+        let response = alert.runModal()
+        NSApp.setActivationPolicy(.prohibited)
+        return response
+    }
+
+    // MARK: - Sparkle delegate (automatic background checks)
 
     func standardUserDriverWillHandleShowingUpdate(_ handleShowingUpdate: Bool, forUpdate update: SUAppcastItem, state: SPUUserUpdateState) {
-        NSRunningApplication.current.activate(options: .activateIgnoringOtherApps)
+        NSApp.setActivationPolicy(.accessory)
+        NSApp.activate(ignoringOtherApps: true)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
             NSApp.windows.forEach { $0.orderFrontRegardless() }
         }
     }
 
     func standardUserDriverWillShowModalAlert() {
-        NSRunningApplication.current.activate(options: .activateIgnoringOtherApps)
+        NSApp.setActivationPolicy(.accessory)
+        NSApp.activate(ignoringOtherApps: true)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
             NSApp.windows.forEach { $0.orderFrontRegardless() }
         }
@@ -81,6 +93,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, SPUStandardUserDriverDelegat
     private var lockFileDescriptor: Int32 = -1
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        AppDelegate.current = self
+
         let lockPath = FileManager.default.temporaryDirectory
             .appendingPathComponent("com.buzzyrobot.tokenbar.lock").path
         lockFileDescriptor = open(lockPath, O_CREAT | O_RDWR, 0o666)

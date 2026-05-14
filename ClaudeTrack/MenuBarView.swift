@@ -113,7 +113,7 @@ struct SettingsPanel: View {
                 settingsRow(icon: "person.slash", label: "Wyloguj z Claude.ai") { fetcher.logout() }
             }
             settingsRow(icon: "arrow.down.circle", label: "Sprawdź aktualizacje") {
-                if let d = NSApp.delegate as? AppDelegate { d.checkForUpdates() }
+                AppDelegate.current?.checkForUpdates()
             }
             settingsRow(icon: "power", label: "Zamknij TokenBar") { NSApplication.shared.terminate(nil) }
         }
