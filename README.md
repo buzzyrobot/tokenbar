@@ -1,4 +1,5 @@
-<img width="250" height="292" alt="tokenbar" src="https://github.com/user-attachments/assets/ddd8a462-c6ed-4e2f-98cf-0610aa53bf95" />
+<img width="250" height="292" alt="tokenbar" src="https://github.com/user-attachments/assets/f3ca6ac1-8284-4ce9-a160-642e196877a4" />
+
 
 
 # TokenBar
