@@ -1,3 +1,6 @@
+<img width="250" height="292" alt="tokenbar" src="https://github.com/user-attachments/assets/ddd8a462-c6ed-4e2f-98cf-0610aa53bf95" />
+
+
 # TokenBar
 
 A lightweight macOS menu bar app that shows your **Claude.ai** and **Codex (ChatGPT)** usage limits at a glance — so you always know how much of your plan you've used.
